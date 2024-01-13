@@ -446,10 +446,17 @@ public class FingerprintSettings extends SubSettings {
         private void updateFooterColumns(@NonNull Activity activity) {
             final EnforcedAdmin admin = RestrictedLockUtilsInternal.checkIfKeyguardFeaturesDisabled(
                     activity, DevicePolicyManager.KEYGUARD_DISABLE_FINGERPRINT, mUserId);
-            final Intent helpIntent = HelpUtils.getHelpIntent(
-                    activity, getString(getHelpResource()), activity.getClass().getName());
-            final View.OnClickListener learnMoreClickListener = (v) ->
-                    activity.startActivityForResult(helpIntent, 0);
+            final Intent helpIntent;
+            final View.OnClickListener learnMoreClickListener;
+            if (getHelpResource() != 0) {
+                helpIntent = HelpUtils.getHelpIntent(
+                        activity, getString(getHelpResource()), activity.getClass().getName());
+                learnMoreClickListener = (v) ->
+                        activity.startActivityForResult(helpIntent, 0);
+            } else {
+                helpIntent = null;
+                learnMoreClickListener = null;
+            }
 
             mFooterColumns.clear();
             if (admin != null) {
@@ -471,28 +478,36 @@ public class FingerprintSettings extends SubSettings {
                 column2.mTitle = getText(
                         R.string.security_fingerprint_disclaimer_lockscreen_disabled_2
                 );
-                if (isSfps()) {
-                    column2.mLearnMoreOverrideText = getText(
-                            R.string.security_settings_fingerprint_settings_footer_learn_more);
+                if (helpIntent != null) {
+                    if (!isUdfps() && mFingerprintWakeAndUnlock) {
+                        column2.mLearnMoreOverrideText = getText(
+                                R.string.security_settings_fingerprint_settings_footer_learn_more);
+                    }
+                    column2.mLearnMoreClickListener = learnMoreClickListener;
                 }
-                column2.mLearnMoreClickListener = learnMoreClickListener;
                 mFooterColumns.add(column2);
             } else {
                 final FooterColumn column = new FooterColumn();
                 column.mTitle = getString(
                         R.string.security_settings_fingerprint_enroll_introduction_v3_message,
                         DeviceHelper.getDeviceName(getActivity()));
-                column.mLearnMoreClickListener = learnMoreClickListener;
-                column.mLearnMoreOverrideText = getText(
-                        R.string.security_settings_fingerprint_settings_footer_learn_more);
+                if (helpIntent != null) {
+                    column.mLearnMoreClickListener = learnMoreClickListener;
+                    column.mLearnMoreOverrideText = getText(
+                            R.string.security_settings_fingerprint_settings_footer_learn_more);
+                }
                 mFooterColumns.add(column);
             }
         }
 
         private boolean isUdfps() {
-            for (FingerprintSensorPropertiesInternal prop : mSensorProperties) {
-                if (prop.isAnyUdfpsType()) {
-                    return true;
+            mFingerprintManager = Utils.getFingerprintManagerOrNull(getActivity());
+            if (mFingerprintManager != null) {
+                mSensorProperties = mFingerprintManager.getSensorPropertiesInternal();
+                for (FingerprintSensorPropertiesInternal prop : mSensorProperties) {
+                    if (prop.isAnyUdfpsType()) {
+                        return true;
+                    }
                 }
             }
             return false;
@@ -538,10 +553,6 @@ public class FingerprintSettings extends SubSettings {
 
         private void addFingerprintPreferences(PreferenceGroup root) {
             final String fpPrefKey = addFingerprintItemPreferences(root);
-            if (!isUdfps() && mFingerprintWakeAndUnlock) {
-                scrollToPreference(fpPrefKey);
-                addFingerprintUnlockCategory();
-            }
             for (AbstractPreferenceController controller : mControllers) {
                 if (controller instanceof FingerprintSettingsPreferenceController) {
                     ((FingerprintSettingsPreferenceController) controller).setUserId(mUserId);
@@ -553,7 +564,7 @@ public class FingerprintSettings extends SubSettings {
             // This needs to be after setting ids, otherwise
             // |mRequireScreenOnToAuthPreferenceController.isChecked| is always checking the primary
             // user instead of the user with |mUserId|.
-            if (isSfps()) {
+            if (!isUdfps() && mFingerprintWakeAndUnlock) {
                 scrollToPreference(fpPrefKey);
                 addFingerprintUnlockCategory();
             }
@@ -855,7 +866,8 @@ public class FingerprintSettings extends SubSettings {
 
         private List<AbstractPreferenceController> buildPreferenceControllers(Context context) {
             final List<AbstractPreferenceController> controllers = new ArrayList<>();
-            if (isSfps()) {
+            if (!isUdfps() && context.getResources().getBoolean(
+                    com.android.internal.R.bool.config_fingerprintWakeAndUnlock)) {
                 mFingerprintUnlockCategoryPreferenceController =
                     new FingerprintUnlockCategoryController(
                         context,

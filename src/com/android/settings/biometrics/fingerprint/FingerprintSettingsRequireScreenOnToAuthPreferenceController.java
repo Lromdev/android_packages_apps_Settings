@@ -18,7 +18,6 @@ package com.android.settings.biometrics.fingerprint;
 
 import android.content.Context;
 import android.hardware.fingerprint.FingerprintManager;
-import android.hardware.fingerprint.FingerprintSensorPropertiesInternal;
 import android.os.UserHandle;
 import android.provider.Settings;
 
@@ -26,8 +25,6 @@ import androidx.preference.Preference;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.settings.Utils;
-
-import java.util.List;
 
 /**
  * Preference controller that controls whether a SFPS device is required to be interactive for
@@ -40,13 +37,11 @@ public class FingerprintSettingsRequireScreenOnToAuthPreferenceController
 
     @VisibleForTesting
     protected FingerprintManager mFingerprintManager;
-    private List<FingerprintSensorPropertiesInternal> mSensorProperties;
 
     public FingerprintSettingsRequireScreenOnToAuthPreferenceController(
             Context context, String prefKey) {
         super(context, prefKey);
         mFingerprintManager = Utils.getFingerprintManagerOrNull(context);
-        mSensorProperties = mFingerprintManager.getSensorPropertiesInternal();
     }
 
     @Override
@@ -96,8 +91,7 @@ public class FingerprintSettingsRequireScreenOnToAuthPreferenceController
     @Override
     public int getAvailabilityStatus() {
         if (mFingerprintManager != null
-                && mFingerprintManager.isHardwareDetected()
-                && !isUdfps()) {
+                && mFingerprintManager.isHardwareDetected()) {
             return mFingerprintManager.hasEnrolledTemplates(getUserId())
                     ? AVAILABLE : CONDITIONALLY_UNAVAILABLE;
         } else {
@@ -107,15 +101,6 @@ public class FingerprintSettingsRequireScreenOnToAuthPreferenceController
 
     private int getUserHandle() {
         return UserHandle.of(getUserId()).getIdentifier();
-    }
-
-    private boolean isUdfps() {
-        for (FingerprintSensorPropertiesInternal prop : mSensorProperties) {
-            if (prop.isAnyUdfpsType()) {
-                return true;
-            }
-        }
-        return false;
     }
 
 }
